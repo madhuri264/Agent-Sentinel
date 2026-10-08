@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agent Sentinel</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0a0e17;
+    color: #e6edf3;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: #111827;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid #1f2937;
+  }
+  h1 { font-size: 20px; letter-spacing: 1px; }
+  h1 span { color: #10b981; }
+  .pulse {
+    width: 10px; height: 10px;
+    background: #10b981;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+    margin-right: 8px;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #6b7280;
+    letter-spacing: 1.5px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    margin-top: 6px;
+    color: #10b981;
+  }
+  .stat-value.warn { color: #f59e0b; }
+  .stat-value.danger { color: #ef4444; }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .chart-box {
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 16px;
+    height: 220px;
+  }
+  .chart-box h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #6b7280;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    gap: 16px;
+  }
+  .panel {
+    background: #111827;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #1f2937;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .panel h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #9ca3af;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #1f2937;
+    padding-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .agent, .log-item, .alert-item {
+    padding: 10px;
+    background: #0a0e17;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid #10b981;
+    font-size: 13px;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .agent { border-left-color: #3b82f6; }
+  .agent.paused { border-left-color: #ef4444; opacity: 0.6; }
+  .alert-item { 
+    border-left-color: #f59e0b;
+    animation: fadeIn 0.3s ease, alertPulse 2s infinite;
+  }
+  @keyframes alertPulse {
+    0%, 100% { background: #0a0e17; }
+    50% { background: #1a1207; }
+  }
+  .log-item { border-left-color: #10b981; }
+  .agent-name { font-weight: bold; color: #e6edf3; }
+  .meta { color: #6b7280; font-size: 11px; margin-top: 3px; }
+  .kill-btn {
+    background: #ef4444; color: white; border: none;
+    padding: 5px 10px; border-radius: 6px; font-size: 10px;
+    cursor: pointer; margin-top: 6px; font-weight: 600;
+  }
+  .kill-btn:hover { background: #dc2626; }
+  .revive-btn {
+    background: #10b981; color: white; border: none;
+    padding: 5px 10px; border-radius: 6px; font-size: 10px;
+    cursor: pointer; margin-top: 6px; font-weight: 600;
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-right: 6px;
+  }
+  .tag-loop { background: #f59e0b; color: #000; }
+  .tag-fail { background: #ef4444; color: #fff; }
+  .empty { color: #4b5563; font-style: italic; font-size: 12px; }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .controls input {
+    flex: 1;
+    background: #0a0e17;
+    border: 1px solid #1f2937;
+    color: #e6edf3;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    outline: none;
+  }
+  .controls input:focus { border-color: #10b981; }
+  .controls select {
+    background: #0a0e17;
+    border: 1px solid #1f2937;
+    color: #e6edf3;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1><span class="pulse"></span>AGENT <span>SENTINEL</span></h1>
+    <div style="font-size:12px;color:#6b7280;">Live monitoring dashboard</div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-label">Total Actions</div>
+      <div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Active Agents</div>
+      <div class="stat-value" id="stat-agents">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Alerts</div>
+      <div class="stat-value warn" id="stat-alerts">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Actions / Min</div>
+      <div class="stat-value" id="stat-rate">0</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-box">
+      <h3>Actions Over Time (last 24h)</h3>
+      <canvas id="timeChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Top Tools</h3>
+      <canvas id="toolChart"></canvas>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Agents <span id="agent-count" style="color:#10b981">0</span></h2>
+      <div id="agents"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Live Log Feed</h2>
+      <div class="controls">
+        <input type="text" id="search" placeholder="Filter by agent ID..." />
+        <select id="timeFilter">
+          <option value="5">Last 5 min</option>
+          <option value="60" selected>Last 1 hour</option>
+          <option value="1440">Last 24 hours</option>
+          <option value="99999">All time</option>
+        </select>
+      </div>
+      <div id="logs"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Alerts <span id="alert-count" style="color:#f59e0b">0</span></h2>
+      <div id="alerts"></div>
+    </div>
+  </div>
+
+<script>
+const API = window.location.origin;
+let allLogs = [];
+let timeChart, toolChart;
+
+async function loadAgents() {
+  const res = await fetch(`${API}/agents`);
+  const agents = await res.json();
+  const el = document.getElementById('agents');
+  document.getElementById('agent-count').textContent = agents.length;
+  document.getElementById('stat-agents').textContent = agents.filter(a => !a.paused).length;
+
+  if (!agents.length) { el.innerHTML = '<div class="empty">No agents yet.</div>'; return; }
+  el.innerHTML = agents.map(a => `
+    <div class="agent ${a.paused ? 'paused' : ''}">
+      <div class="agent-name">● ${a.agent_id}</div>
+      <div class="meta">${a.paused ? '🔴 PAUSED' : '🟢 Active'}</div>
+      ${a.paused 
+        ? `<button class="revive-btn" onclick="revive('${a.agent_id}')">REVIVE</button>`
+        : `<button class="kill-btn" onclick="kill('${a.agent_id}')">KILL</button>`}
+    </div>
+  `).join('');
+}
+
+async function loadLogs() {
+  const res = await fetch(`${API}/logs`);
+  allLogs = await res.json();
+  document.getElementById('stat-total').textContent = allLogs.length;
+  filterAndRenderLogs();
+}
+
+function filterAndRenderLogs() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const minutes = parseInt(document.getElementById('timeFilter').value);
+  const cutoff = new Date(Date.now() - minutes * 60000);
+
+  const filtered = allLogs.filter(l => {
+    const matchSearch = !search || l.agent_id.toLowerCase().includes(search);
+    const matchTime = minutes > 9999 || new Date(l.timestamp) > cutoff;
+    return matchSearch && matchTime;
+  });
+
+  // Rate: logs in last 60s
+  const oneMinAgo = new Date(Date.now() - 60000);
+  const recentCount = allLogs.filter(l => new Date(l.timestamp) > oneMinAgo).length;
+  document.getElementById('stat-rate').textContent = recentCount;
+
+  const el = document.getElementById('logs');
+  if (!filtered.length) { el.innerHTML = '<div class="empty">No logs match.</div>'; return; }
+  el.innerHTML = filtered.slice(0, 30).map(l => `
+    <div class="log-item">
+      <span class="agent-name">${l.agent_id}</span>
+      <span style="color:#9ca3af"> → ${l.tool_name}</span>
+      <div class="meta">${new Date(l.timestamp).toLocaleTimeString()} · ${l.action}</div>
+    </div>
+  `).join('');
+}
+
+async function loadAlerts() {
+  const res = await fetch(`${API}/alerts`);
+  const alerts = await res.json();
+  const el = document.getElementById('alerts');
+  document.getElementById('alert-count').textContent = alerts.length;
+  document.getElementById('stat-alerts').textContent = alerts.length;
+  if (!alerts.length) { el.innerHTML = '<div class="empty">No alerts. All systems healthy.</div>'; return; }
+  el.innerHTML = alerts.slice(0, 20).map(a => `
+    <div class="alert-item">
+      <span class="tag ${a.alert_type === 'LOOP' ? 'tag-loop' : 'tag-fail'}">${a.alert_type}</span>
+      <span style="color:#e6edf3">${a.agent_id}</span>
+      <div class="meta">${a.message}</div>
+      <div class="meta">${new Date(a.timestamp).toLocaleTimeString()}</div>
+    </div>
+  `).join('');
+}
+
+function buildCharts() {
+  // Time chart: group by hour (last 24h)
+  const buckets = {};
+  const now = new Date();
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 3600000);
+    const key = d.getHours().toString().padStart(2, '0') + ':00';
+    buckets[key] = 0;
+  }
+  allLogs.forEach(l => {
+    const h = new Date(l.timestamp).getHours().toString().padStart(2, '0') + ':00';
+    if (buckets[h] !== undefined) buckets[h]++;
+  });
+
+  // Tool chart: count per tool
+  const toolCounts = {};
+  allLogs.forEach(l => { toolCounts[l.tool_name] = (toolCounts[l.tool_name] || 0) + 1; });
+  const topTools = Object.entries(toolCounts).sort((a,b) => b[1]-a[1]).slice(0, 5);
+
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2937' } },
+      y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2937' } }
+    }
+  };
+
+  if (timeChart) timeChart.destroy();
+  timeChart = new Chart(document.getElementById('timeChart'), {
+    type: 'line',
+    data: {
+      labels: Object.keys(buckets),
+      datasets: [{
+        data: Object.values(buckets),
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 0
+      }]
+    },
+    options: chartOpts
+  });
+
+  if (toolChart) toolChart.destroy();
+  toolChart = new Chart(document.getElementById('toolChart'), {
+    type: 'doughnut',
+    data: {
+      labels: topTools.map(t => t[0]),
+      datasets: [{
+        data: topTools.map(t => t[1]),
+        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 } } } }
+    }
+  });
+}
+
+async function kill(id) { await fetch(`${API}/kill/${id}`, {method:'POST'}); refresh(); }
+async function revive(id) { await fetch(`${API}/revive/${id}`, {method:'POST'}); refresh(); }
+
+function refresh() {
+  loadAgents();
+  loadLogs().then(buildCharts);
+  loadAlerts();
+}
+
+document.getElementById('search').addEventListener('input', filterAndRenderLogs);
+document.getElementById('timeFilter').addEventListener('change', filterAndRenderLogs);
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
